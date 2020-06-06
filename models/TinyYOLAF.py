@@ -27,8 +27,8 @@ class TinyYOLAF(nn.Module):
         
         # s = 32
         self.conv_set_3 = nn.Sequential(
-            Conv2d(512, 512, 3, padding=1, leakyReLU=True),
-            Conv2d(512, 512, 3, padding=1, leakyReLU=True),
+            Conv2d(512, 256, 1, leakyReLU=True),
+            Conv2d(256, 512, 3, padding=1, leakyReLU=True),
         )
         self.conv_1x1_3 = Conv2d(512, 256, 1, leakyReLU=True)
         self.pred_3 = nn.Conv2d(512, self.anchor_number*(1 + 4), 1)
@@ -37,7 +37,6 @@ class TinyYOLAF(nn.Module):
         self.conv_set_2 = nn.Sequential(
             Conv2d(512, 256, 1, leakyReLU=True),
             Conv2d(256, 256, 3, padding=1, leakyReLU=True),
-            Conv2d(256, 256, 3, padding=1, leakyReLU=True),
         )
         self.conv_1x1_2 = Conv2d(256, 128, 1, leakyReLU=True)
         self.pred_2 = nn.Conv2d(256, self.anchor_number*(1 + 4), 1)
@@ -45,7 +44,6 @@ class TinyYOLAF(nn.Module):
         # s = 8
         self.conv_set_1 = nn.Sequential(
             Conv2d(256, 128, 1, leakyReLU=True),
-            Conv2d(128, 128, 3, padding=1, leakyReLU=True),
             Conv2d(128, 128, 3, padding=1, leakyReLU=True),
         )
         self.pred_1 = nn.Conv2d(128, self.anchor_number*(1 + 4), 1)
