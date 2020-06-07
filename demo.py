@@ -12,7 +12,7 @@ import time
 
 parser = argparse.ArgumentParser(description='Face Detection')
 parser.add_argument('-v', '--version', default='FDNet',
-                    help='FDNet, YOLAF, TinyYOLAF')
+                    help='FDNet, TinyYOLAF')
 parser.add_argument('-d', '--dataset', default='widerface',
                     help='widerface dataset')
 parser.add_argument('--trained_model', default='weights/widerface/',
@@ -48,16 +48,18 @@ def test_net(net, device, testset, transform, thresh):
         # map the boxes to origin image scale
         bbox_pred *= scale
 
-        class_color = (0, 0, 255)
+        class_color = (255, 0, 0)
         for i, box in enumerate(bbox_pred):
             xmin, ymin, xmax, ymax = box
             # print(xmin, ymin, xmax, ymax)
             if scores[i] > thresh:
-                cv2.rectangle(img, (int(xmin), int(ymin)), (int(xmax), int(ymax)), class_color, 1)
-        cv2.imshow('face detection', img)
-        cv2.waitKey(0)
-        # print('Saving the' + str(index) + '-th image ...')
-        # cv2.imwrite('test_images/' + args.dataset+ '3/' + str(index).zfill(6) +'.jpg', img)
+                cv2.rectangle(img, (int(xmin), int(ymin)), (int(xmax), int(ymax)), class_color, 2)
+        # cv2.imshow('face detection', img)
+        # cv2.waitKey(0)
+        print('Saving the' + str(index) + '-th image ...')
+        cv2.imwrite(str(index).zfill(6) +'.jpg', img)
+        if index > 5:
+            break
 
 
 
@@ -87,13 +89,6 @@ def test():
 
         net = FDNet(device, input_size=input_size, trainable=False)
         print('Let us test FDNet......')
-
-    elif args.version == 'YOLAF':
-        from models.YOLAF import YOLAF
-        anchor_size = tools.get_total_anchor_size(name=args.dataset)
-
-        net = YOLAF(device, input_size=input_size, trainable=False, anchor_size=anchor_size)
-        print('Let us test YOLAF......')
 
     elif args.version == 'TinyYOLAF':
         from models.TinyYOLAF import TinyYOLAF

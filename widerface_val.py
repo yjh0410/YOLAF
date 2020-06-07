@@ -8,6 +8,7 @@ import torch.backends.cudnn as cudnn
 from torch.autograd import Variable
 from data import config, WIDERFace_ROOT
 from data import WIDERFaceDetection, WIDERFaceAnnotationTransform, WIDERFace_CLASSES, WIDERFace_ROOT, BaseTransform
+import tools
 import numpy as np
 import cv2
 import math
@@ -21,7 +22,7 @@ from IPython import embed
 
 parser = argparse.ArgumentParser(description='FDNet: Face Detector')
 parser.add_argument('-v', '--version', default='FDNet',
-                    help='FDNet')
+                    help='FDNet, TinyYOLAF')
 parser.add_argument('--trained_model', default='weights/widerface/',
                     type=str, help='Trained state_dict file path to open')
 parser.add_argument('-g', '--gt', default='/home/k303/face_detection/dataset/wider_face/eval_tools/eval_tools/ground_truth/')
@@ -134,24 +135,18 @@ if __name__=="__main__":
         device = torch.device("cpu")
 
     cfg = config.WF_config
-    transform = BaseTransform(cfg['min_dim'])
+    input_size = cfg['min_dim']
+    transform = BaseTransform(input_size)
 
     # load net
     if args.version == 'FDNet':
         from models.FDNet import FDNet
-        net = FDNet(device, input_size=cfg['min_dim'], trainable=False)
+        net = FDNet(device, input_size=input_size, trainable=False)
         print('Let us eval FDNet......')
-
-    elif args.version == 'YOLAF':
-        from models.YOLAF import YOLAF
-        anchor_size = tools.get_total_anchor_size(name=args.dataset)
-
-        net = YOLAF(device, input_size=input_size, trainable=False, anchor_size=anchor_size)
-        print('Let us eval YOLAF......')
 
     elif args.version == 'TinyYOLAF':
         from models.TinyYOLAF import TinyYOLAF
-        anchor_size = tools.get_total_anchor_size(name=args.dataset)
+        anchor_size = tools.get_total_anchor_size(name='widerface')
 
         net = TinyYOLAF(device, input_size=input_size, trainable=False, anchor_size=anchor_size)
         print('Let us eval TinyYOLAF......')

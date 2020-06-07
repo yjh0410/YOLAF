@@ -18,7 +18,7 @@ import argparse
 def parse_args():
     parser = argparse.ArgumentParser(description='Face Detection')
     parser.add_argument('-v', '--version', default='FDNet',
-                        help='FDNet, YOLAF, TinyYOLAF')
+                        help='FDNet, TinyYOLAF')
     parser.add_argument('-d', '--dataset', default='widerface',
                         help='widerface dataset')
     parser.add_argument('-hr', '--high_resolution', action='store_true', default=False,
@@ -101,13 +101,6 @@ def train():
 
         net = FDNet(device, input_size=input_size, trainable=True, hr=hr)
         print('Let us train FDNet......')
-
-    elif args.version == 'YOLAF':
-        from models.YOLAF import YOLAF
-        anchor_size = tools.get_total_anchor_size(name=args.dataset)
-
-        net = YOLAF(device, input_size=input_size, trainable=True, anchor_size=anchor_size, hr=hr)
-        print('Let us train YOLAF......')
 
     elif args.version == 'TinyYOLAF':
         from models.TinyYOLAF import TinyYOLAF
@@ -201,7 +194,7 @@ def train():
             if args.version == 'FDNet':
                 targets = tools.gt_creator(input_size, net.stride, label_lists=targets, name=args.dataset)
             
-            elif args.version == 'YOLAF' or args.version == 'TinyYOLAF':
+            elif args.version == 'TinyYOLAF':
                 targets = tools.multi_gt_creator_ab(input_size, net.stride, label_lists=targets, name=args.dataset)
 
             # to device
