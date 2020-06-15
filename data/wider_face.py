@@ -18,7 +18,7 @@ plt.switch_backend('agg')
 
 WIDERFace_CLASSES = ['face']  # always index 0
 # note: if you used our download scripts, this should be right
-WIDERFace_ROOT = "/home/k303/face_detection/dataset/wider_face/"
+WIDERFace_ROOT = "/home/k545/face_detection/dataset/wider_face/"
 
 
 class WIDERFaceAnnotationTransform(object):
@@ -165,7 +165,7 @@ class WIDERFaceDetection(data.Dataset):
         
     def __getitem__(self, index):
         im, gt, h, w = self.pull_item(index)
-        return im, gt, h, w
+        return im, gt
 
     def __len__(self):
         return len(self.img_ids)

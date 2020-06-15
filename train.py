@@ -18,7 +18,7 @@ import argparse
 def parse_args():
     parser = argparse.ArgumentParser(description='Face Detection')
     parser.add_argument('-v', '--version', default='FDNet',
-                        help='FDNet, TinyYOLAF')
+                        help='FDNet, TinyYOLAF, MiniYOLAF')
     parser.add_argument('-d', '--dataset', default='widerface',
                         help='widerface dataset')
     parser.add_argument('-hr', '--high_resolution', action='store_true', default=False,
@@ -75,7 +75,7 @@ def train():
     if args.high_resolution:
         print('use hi-res backbone')
         hr = True
-    
+
     cfg = WF_config
 
     if args.cuda:
@@ -104,10 +104,17 @@ def train():
 
     elif args.version == 'TinyYOLAF':
         from models.TinyYOLAF import TinyYOLAF
-        anchor_size = tools.get_total_anchor_size(name=args.dataset)
+        anchor_size = tools.get_total_anchor_size(name=args.dataset, version=args.version)
 
         net = TinyYOLAF(device, input_size=input_size, trainable=True, anchor_size=anchor_size, hr=hr)
         print('Let us train TinyYOLAF......')
+
+    elif args.version == 'MiniYOLAF':
+        from models.MiniYOLAF import MiniYOLAF
+        anchor_size = tools.get_total_anchor_size(name=args.dataset, version=args.version)
+
+        net = MiniYOLAF(device, input_size=input_size, trainable=True, anchor_size=anchor_size, hr=hr)
+        print('Let us train MiniYOLAF......')
 
     else:
         print('Unknown version !!!')
@@ -172,11 +179,10 @@ def train():
         # use step lr
         else:
             if epoch in cfg['lr_epoch']:
-                tmp_lr = cfg['lr_step'][step_index]
+                tmp_lr = tmp_lr * 0.1
                 set_lr(optimizer, tmp_lr)
-                step_index += 1
     
-        for iter_i, (images, targets, img_h_w) in enumerate(data_loader):
+        for iter_i, (images, targets) in enumerate(data_loader):
             # WarmUp strategy for learning rate
             if not args.no_warm_up:
                 if epoch < args.wp_epoch:
@@ -194,8 +200,8 @@ def train():
             if args.version == 'FDNet':
                 targets = tools.gt_creator(input_size, net.stride, label_lists=targets, name=args.dataset)
             
-            elif args.version == 'TinyYOLAF':
-                targets = tools.multi_gt_creator_ab(input_size, net.stride, label_lists=targets, name=args.dataset)
+            elif args.version == 'TinyYOLAF' or args.version == 'MiniYOLAF':
+                targets = tools.multi_gt_creator_ab(input_size, net.stride, label_lists=targets, name=args.dataset, version=args.version)
 
             # to device
             images = images.to(device)
@@ -226,7 +232,10 @@ def train():
 
             # multi-scale trick
             if iter_i % 10 == 0 and iter_i > 0 and args.multi_scale:
-                size = random.randint(10, 20) * 32
+                if epoch >= max_epoch - 10:
+                    size = 416
+                else:
+                    size = random.randint(10, 20) * 32
                 input_size = size
 
                 # change input dim

@@ -25,8 +25,6 @@ parser.add_argument('-v', '--version', default='FDNet',
                     help='FDNet, TinyYOLAF')
 parser.add_argument('--trained_model', default='weights/widerface/',
                     type=str, help='Trained state_dict file path to open')
-parser.add_argument('-g', '--gt', default='/home/k303/face_detection/dataset/wider_face/eval_tools/eval_tools/ground_truth/')
-
 parser.add_argument('--save_folder', default='pred/', type=str,
                     help='Dir to save results')
 parser.add_argument('--cuda', default=True, type=bool,
@@ -146,10 +144,17 @@ if __name__=="__main__":
 
     elif args.version == 'TinyYOLAF':
         from models.TinyYOLAF import TinyYOLAF
-        anchor_size = tools.get_total_anchor_size(name='widerface')
+        anchor_size = tools.get_total_anchor_size(name='widerface', version=args.version)
 
         net = TinyYOLAF(device, input_size=input_size, trainable=False, anchor_size=anchor_size)
         print('Let us eval TinyYOLAF......')
+
+    elif args.version == 'MiniYOLAF':
+        from models.MiniYOLAF import MiniYOLAF
+        anchor_size = tools.get_total_anchor_size(name=args.dataset, version=args.version)
+
+        net = MiniYOLAF(device, input_size=input_size, trainable=False, anchor_size=anchor_size)
+        print('Let us eval MiniYOLAF......')
 
     else:
         print('Unknown version !!!')
