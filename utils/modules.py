@@ -46,3 +46,35 @@ class SPP(nn.Module):
         x = torch.cat([x, x_1, x_2, x_3], dim=1)
 
         return self.fuse_conv(x)
+
+class ASPP(nn.Module):
+    """
+        A simple version of ASPP
+    """
+    def __init__(self, in_ch, out_ch):
+        super(ASPP, self).__init__()
+        inter_ch = in_ch // 2
+        # branch_1:
+        self.conv3x3 = Conv2d(inter_ch, inter_ch, 3, padding=1)
+
+        # branch_2:
+        self.branch_1 = Conv2d(inter_ch, inter_ch, 3, padding=1)
+        self.branch_2 = Conv2d(inter_ch, inter_ch, 3, padding=2, dilation=2)
+        self.branch_3 = Conv2d(inter_ch, inter_ch, 3, padding=3, dilation=3)
+
+        self.fusion = Conv2d(inter_ch * 4, out_ch, 1)
+
+    def forward(self, x):
+        x_1, x_2 = torch.chunk(x, 2, dim=1)
+
+        # branch 1:
+        x_1 = self.conv3x3(x_1)
+
+        # branch 2:
+        x_2_1 = self.branch_1(x_2)
+        x_2_2 = self.branch_2(x_2)
+        x_2_3 = self.branch_3(x_2)
+
+        x = torch.cat([x_1, x_2_1, x_2_2, x_2_3], dim=1)
+
+        return self.fusion(x)
