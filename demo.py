@@ -163,6 +163,13 @@ def run():
         net = TinyYOLAF(device, input_size=input_size, trainable=False, anchor_size=anchor_size)
         print('Let us test TinyYOLAF......')
 
+    elif args.version == 'MiniYOLAF':
+        from models.MiniYOLAF import MiniYOLAF
+        anchor_size = tools.get_total_anchor_size(name=args.setup)
+
+        net = MiniYOLAF(device, input_size=input_size, trainable=False, anchor_size=anchor_size)
+        print('Let us test MiniYOLAF......')
+
     else:
         print('Unknown version !!!')
         exit()
