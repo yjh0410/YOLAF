@@ -22,7 +22,7 @@ from IPython import embed
 
 parser = argparse.ArgumentParser(description='FDNet: Face Detector')
 parser.add_argument('-v', '--version', default='FDNet',
-                    help='FDNet, TinyYOLAF')
+                    help='TinyYOLAF')
 parser.add_argument('--trained_model', default='weights/widerface/',
                     type=str, help='Trained state_dict file path to open')
 parser.add_argument('--save_folder', default='pred/', type=str,
@@ -137,17 +137,19 @@ if __name__=="__main__":
     transform = BaseTransform(input_size)
 
     # load net
-    if args.version == 'FDNet':
-        from models.FDNet import FDNet
-        net = FDNet(device, input_size=input_size, trainable=False)
-        print('Let us eval FDNet......')
-
-    elif args.version == 'TinyYOLAF':
+    if args.version == 'TinyYOLAF':
         from models.TinyYOLAF import TinyYOLAF
         anchor_size = tools.get_total_anchor_size(name='widerface', version=args.version)
 
         net = TinyYOLAF(device, input_size=input_size, trainable=False, anchor_size=anchor_size)
         print('Let us eval TinyYOLAF......')
+
+    elif args.version == 'SlimYOLAF':
+        from models.SlimYOLAF import SlimYOLAF
+        anchor_size = tools.get_total_anchor_size(name=args.dataset, version=args.version)
+
+        net = SlimYOLAF(device, input_size=input_size, trainable=False, anchor_size=anchor_size)
+        print('Let us test SlimYOLAF......')
 
     elif args.version == 'MiniYOLAF':
         from models.MiniYOLAF import MiniYOLAF

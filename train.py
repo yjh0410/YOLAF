@@ -18,7 +18,7 @@ import argparse
 def parse_args():
     parser = argparse.ArgumentParser(description='Face Detection')
     parser.add_argument('-v', '--version', default='FDNet',
-                        help='FDNet, TinyYOLAF, MiniYOLAF')
+                        help='TinyYOLAF, MiniYOLAF')
     parser.add_argument('-d', '--dataset', default='widerface',
                         help='widerface dataset')
     parser.add_argument('-hr', '--high_resolution', action='store_true', default=False,
@@ -96,18 +96,19 @@ def train():
         dataset = WIDERFaceDetection(root=args.dataset_root, transform=SSDAugmentation(cfg['min_dim'], mean=(0.406, 0.456, 0.485), std=(0.225, 0.224, 0.229)))
 
     # build model
-    if args.version == 'FDNet':
-        from models.FDNet import FDNet
-
-        net = FDNet(device, input_size=input_size, trainable=True, hr=hr)
-        print('Let us train FDNet......')
-
-    elif args.version == 'TinyYOLAF':
+    if args.version == 'TinyYOLAF':
         from models.TinyYOLAF import TinyYOLAF
         anchor_size = tools.get_total_anchor_size(name=args.dataset, version=args.version)
 
         net = TinyYOLAF(device, input_size=input_size, trainable=True, anchor_size=anchor_size, hr=hr)
         print('Let us train TinyYOLAF......')
+
+    elif args.version == 'SlimYOLAF':
+        from models.SlimYOLAF import SlimYOLAF
+        anchor_size = tools.get_total_anchor_size(name=args.dataset, version=args.version)
+
+        net = SlimYOLAF(device, input_size=input_size, trainable=True, anchor_size=anchor_size, hr=hr)
+        print('Let us train SlimYOLAF......')
 
     elif args.version == 'MiniYOLAF':
         from models.MiniYOLAF import MiniYOLAF
@@ -197,11 +198,7 @@ def train():
             # vis_data(images, targets, input_size)
 
             # make train label
-            if args.version == 'FDNet':
-                targets = tools.gt_creator(input_size, net.stride, label_lists=targets, name=args.dataset)
-            
-            elif args.version == 'TinyYOLAF' or args.version == 'MiniYOLAF':
-                targets = tools.multi_gt_creator_ab(input_size, net.stride, label_lists=targets, name=args.dataset, version=args.version)
+            targets = tools.multi_gt_creator_ab(input_size, net.stride, label_lists=targets, name=args.dataset, version=args.version)
 
             # to device
             images = images.to(device)

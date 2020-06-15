@@ -12,7 +12,7 @@ import time
 
 parser = argparse.ArgumentParser(description='Face Detection')
 parser.add_argument('-v', '--version', default='FDNet',
-                    help='FDNet, TinyYOLAF')
+                    help='TinyYOLAF, MiniYOLAF')
 parser.add_argument('-d', '--dataset', default='widerface',
                     help='widerface dataset')
 parser.add_argument('--trained_model', default='weights/widerface/',
@@ -54,12 +54,12 @@ def test_net(net, device, testset, transform, thresh):
             # print(xmin, ymin, xmax, ymax)
             if scores[i] > thresh:
                 cv2.rectangle(img, (int(xmin), int(ymin)), (int(xmax), int(ymax)), class_color, 2)
-        # cv2.imshow('face detection', img)
-        # cv2.waitKey(0)
-        print('Saving the' + str(index) + '-th image ...')
-        cv2.imwrite(str(index).zfill(6) +'.jpg', img)
-        if index > 5:
-            break
+        cv2.imshow('face detection', img)
+        cv2.waitKey(0)
+        # print('Saving the' + str(index) + '-th image ...')
+        # cv2.imwrite(str(index).zfill(6) +'.jpg', img)
+        # if index > 5:
+        #     break
 
 
 
@@ -84,18 +84,26 @@ def test():
         exit(0)
 
     # build model
-    if args.version == 'FDNet':
-        from models.FDNet import FDNet
-
-        net = FDNet(device, input_size=input_size, trainable=False)
-        print('Let us test FDNet......')
-
-    elif args.version == 'TinyYOLAF':
+    if args.version == 'TinyYOLAF':
         from models.TinyYOLAF import TinyYOLAF
-        anchor_size = tools.get_total_anchor_size(name=args.dataset)
+        anchor_size = tools.get_total_anchor_size(name=args.dataset, version=args.version)
 
         net = TinyYOLAF(device, input_size=input_size, trainable=False, anchor_size=anchor_size)
         print('Let us test TinyYOLAF......')
+
+    elif args.version == 'SlimYOLAF':
+        from models.SlimYOLAF import SlimYOLAF
+        anchor_size = tools.get_total_anchor_size(name=args.dataset, version=args.version)
+
+        net = SlimYOLAF(device, input_size=input_size, trainable=False, anchor_size=anchor_size)
+        print('Let us test SlimYOLAF......')
+
+    elif args.version == 'MiniYOLAF':
+        from models.MiniYOLAF import MiniYOLAF
+        anchor_size = tools.get_total_anchor_size(name=args.dataset, version=args.version)
+
+        net = MiniYOLAF(device, input_size=input_size, trainable=False, anchor_size=anchor_size)
+        print('Let us test MiniYOLAF......')
 
     else:
         print('Unknown version !!!')

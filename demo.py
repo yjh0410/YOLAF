@@ -12,7 +12,7 @@ import time
 
 parser = argparse.ArgumentParser(description='Face Detection')
 parser.add_argument('-v', '--version', default='FDNet',
-                    help='FDNet, TinyYOLAF')
+                    help='TinyYOLAF')
 parser.add_argument('--setup', default='widerface',
                     type=str, help='widerface')
 parser.add_argument('--mode', default='image',
@@ -150,18 +150,19 @@ def run():
     input_size = cfg['min_dim']
 
     # build model
-    if args.version == 'FDNet':
-        from models.FDNet import FDNet
-
-        net = FDNet(device, input_size=input_size, trainable=False)
-        print('Let us test FDNet......')
-
-    elif args.version == 'TinyYOLAF':
+    if args.version == 'TinyYOLAF':
         from models.TinyYOLAF import TinyYOLAF
         anchor_size = tools.get_total_anchor_size(name=args.setup)
 
         net = TinyYOLAF(device, input_size=input_size, trainable=False, anchor_size=anchor_size)
         print('Let us test TinyYOLAF......')
+
+    elif args.version == 'SlimYOLAF':
+        from models.SlimYOLAF import SlimYOLAF
+        anchor_size = tools.get_total_anchor_size(name=args.setup)
+
+        net = SlimYOLAF(device, input_size=input_size, trainable=False, anchor_size=anchor_size)
+        print('Let us test SlimYOLAF......')
 
     elif args.version == 'MiniYOLAF':
         from models.MiniYOLAF import MiniYOLAF
