@@ -25,33 +25,29 @@ class SlimYOLAF(nn.Module):
         # backbone darknet-tiny
         self.backbone = darknet_tiny(pretrained=trainable, hr=hr)
 
-        # neck: FPN
-        ## Top layer
-        self.toplayer = nn.Conv2d(1024, 128, kernel_size=1)
+        # s = 32
+        self.conv_set_3 = Conv2d(512, 256, 1, leakyReLU=True)
+        self.conv_1x1_3 = Conv2d(256, 128, 1, leakyReLU=True)
+        self.pred_3 = nn.Sequential(
+            Conv2d(256, 512, 3, padding=1, leakyReLU=True),
+            nn.Conv2d(512, self.anchor_number*(1 + 4), 1)
+            )
 
-        ## Lateral layers
-        self.latlayer4 = nn.Conv2d(256, 128, kernel_size=1)
-        self.latlayer3 = nn.Conv2d(128, 128, kernel_size=1)
+        # s = 16
+        self.conv_set_2 = Conv2d(384, 128, 1, leakyReLU=True)
+        self.conv_1x1_2 = Conv2d(128, 64, 1, leakyReLU=True)
+        self.pred_2 = nn.Sequential(
+            Conv2d(128, 256, 3, padding=1, leakyReLU=True),
+            nn.Conv2d(256, self.anchor_number*(1 + 4), 1)
+            )
 
-        ## Smooth layers
-        self.smooth5 = nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1)
-        self.smooth4 = nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1)
-        self.smooth3 = nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1)
+        # s = 8
+        self.conv_set_1 = Conv2d(192, 64, 1, leakyReLU=True)
+        self.pred_1 = nn.Sequential(
+            Conv2d(64, 128, 3, padding=1, leakyReLU=True),
+            nn.Conv2d(128, self.anchor_number*(1 + 4), 1)
+            )
 
-        # head
-        self.confhead = nn.Sequential(
-            Conv2d(128, 128, 3, padding=1),
-            nn.Conv2d(128, self.anchor_number * 1, 1)
-        )
-
-        self.bboxhead = nn.Sequential(
-            Conv2d(128, 128, 3, padding=1),
-            nn.Conv2d(128, self.anchor_number * 4, 1)
-        )
-
-    def _upsample_add(self, x, y):
-        _, _, H , W = y.size()
-        return F.interpolate(x, size=(H,W), mode='bilinear', align_corners=True) + y
 
     def create_grid(self, input_size):
         total_grid_xy = []
@@ -181,38 +177,57 @@ class SlimYOLAF(nn.Module):
 
     def forward(self, x, target=None):
         # backbone
-        c3, c4, c5 = self.backbone(x)
-        B = c3.size(0)
+        fmp_1, fmp_2, fmp_3 = self.backbone(x)
 
-        # Top-down
-        p5 = self.toplayer(c5)
-        p4 = self._upsample_add(p5, self.latlayer4(c4))
-        p3 = self._upsample_add(p4, self.latlayer3(c3))
+        # detection head
+        # FPN neck
+        fmp_3 = self.conv_set_3(fmp_3)
+        fmp_3_up = F.interpolate(self.conv_1x1_3(fmp_3), scale_factor=2.0, mode='bilinear', align_corners=True)
 
-        # Smooth
-        p5 = self.smooth5(p5)
-        p4 = self.smooth4(p4)
-        p3 = self.smooth3(p3)
+        fmp_2 = torch.cat([fmp_2, fmp_3_up], 1)
+        fmp_2 = self.conv_set_2(fmp_2)
+        fmp_2_up = F.interpolate(self.conv_1x1_2(fmp_2), scale_factor=2.0, mode='bilinear', align_corners=True)
+
+        fmp_1 = torch.cat([fmp_1, fmp_2_up], 1)
+        fmp_1 = self.conv_set_1(fmp_1)
 
         # head
-        # p5
-        conf_pred_5 = self.confhead(p5).permute(0, 2, 3, 1).contiguous().view(B, -1, self.anchor_number * 1).view(B, -1, 1)
-        bbox_pred_5 = self.bboxhead(p5).permute(0, 2, 3, 1).contiguous().view(B, -1, self.anchor_number * 4).view(B, -1, 4)
+        # s = 32
+        pred_3 = self.pred_3(fmp_3)
 
-        # p4
-        conf_pred_4 = self.confhead(p4).permute(0, 2, 3, 1).contiguous().view(B, -1, self.anchor_number * 1).view(B, -1, 1)
-        bbox_pred_4 = self.bboxhead(p4).permute(0, 2, 3, 1).contiguous().view(B, -1, self.anchor_number * 4).view(B, -1, 4)
+        # s = 16
+        pred_2 = self.pred_2(fmp_2)
 
-        # p3
-        conf_pred_3 = self.confhead(p3).permute(0, 2, 3, 1).contiguous().view(B, -1, self.anchor_number * 1).view(B, -1, 1)
-        bbox_pred_3 = self.bboxhead(p3).permute(0, 2, 3, 1).contiguous().view(B, -1, self.anchor_number * 4).view(B, -1, 4)
+        # s = 8
+        pred_1 = self.pred_1(fmp_1)
 
-        conf_pred = torch.cat([conf_pred_3, conf_pred_4, conf_pred_5], dim=1)
-        txtytwth_pred = torch.cat([bbox_pred_3, bbox_pred_4, bbox_pred_5], dim=1)
+        preds = [pred_1, pred_2, pred_3]
+        total_conf_pred = []
+        total_txtytwth_pred = []
+        B = HW = 0
+        for pred in preds:
+            B_, abC_, H_, W_ = pred.size()
+
+            # [B, anchor_n * C, H, W] -> [B, H, W, anchor_n * C] -> [B, H*W, anchor_n*C]
+            pred = pred.permute(0, 2, 3, 1).contiguous().view(B_, H_*W_, abC_)
+
+            # Divide prediction to obj_pred, xywh_pred and cls_pred   
+            # [B, H*W*anchor_n, 1]
+            conf_pred = pred[:, :, :1 * self.anchor_number].contiguous().view(B_, H_*W_*self.anchor_number, 1)
+            # [B, H*W*anchor_n, 4]
+            txtytwth_pred = pred[:, :, 1 * self.anchor_number:].contiguous().view(B_, H_*W_*self.anchor_number, 4)
+
+            total_conf_pred.append(conf_pred)
+            total_txtytwth_pred.append(txtytwth_pred)
+            B = B_
+            HW += H_*W_
+        
+        conf_pred = torch.cat(total_conf_pred, 1)
+        txtytwth_pred = torch.cat(total_txtytwth_pred, 1)
 
         # test
         if not self.trainable:
-            txtytwth_pred = txtytwth_pred.view(B, HW, self.anchor_number, 4)
+            txtytwth_pred = txtytwth_pred.view(B, -1, self.anchor_number, 4)
             with torch.no_grad():
                 # batch size = 1                
                 all_obj = torch.sigmoid(conf_pred[0, :, 0])           # 0 is because that these is only 1 batch.
