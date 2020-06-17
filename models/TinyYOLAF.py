@@ -31,7 +31,7 @@ class TinyYOLAF(nn.Module):
             Conv2d(256, 512, 3, padding=1, leakyReLU=True),
         )
         self.conv_1x1_3 = Conv2d(512, 256, 1, leakyReLU=True)
-        self.pred_3 = nn.Conv2d(512, self.anchor_number*(1 + 4), 1)
+        self.pred_3 = nn.Conv2d(512, self.anchor_number*(2 + 4), 1)
 
         # s = 16
         self.conv_set_2 = nn.Sequential(
@@ -39,14 +39,14 @@ class TinyYOLAF(nn.Module):
             Conv2d(256, 256, 3, padding=1, leakyReLU=True),
         )
         self.conv_1x1_2 = Conv2d(256, 128, 1, leakyReLU=True)
-        self.pred_2 = nn.Conv2d(256, self.anchor_number*(1 + 4), 1)
+        self.pred_2 = nn.Conv2d(256, self.anchor_number*(2 + 4), 1)
 
         # s = 8
         self.conv_set_1 = nn.Sequential(
             Conv2d(256, 128, 1, leakyReLU=True),
             Conv2d(128, 128, 3, padding=1, leakyReLU=True),
         )
-        self.pred_1 = nn.Conv2d(128, self.anchor_number*(1 + 4), 1)
+        self.pred_1 = nn.Conv2d(128, self.anchor_number*(2 + 4), 1)
     
     def create_grid(self, input_size):
         total_grid_xy = []
@@ -212,9 +212,9 @@ class TinyYOLAF(nn.Module):
 
             # Divide prediction to obj_pred, xywh_pred and cls_pred   
             # [B, H*W*anchor_n, 1]
-            conf_pred = pred[:, :, :1 * self.anchor_number].contiguous().view(B_, H_*W_*self.anchor_number, 1)
+            conf_pred = pred[:, :, :self.anchor_number * 2].contiguous().view(B_, H_*W_*self.anchor_number, 2)
             # [B, H*W*anchor_n, 4]
-            txtytwth_pred = pred[:, :, 1 * self.anchor_number:].contiguous().view(B_, H_*W_*self.anchor_number, 4)
+            txtytwth_pred = pred[:, :, self.anchor_number * 2:].contiguous().view(B_, H_*W_*self.anchor_number, 4)
 
             total_conf_pred.append(conf_pred)
             total_txtytwth_pred.append(txtytwth_pred)
@@ -229,18 +229,18 @@ class TinyYOLAF(nn.Module):
             txtytwth_pred = txtytwth_pred.view(B, HW, self.anchor_number, 4)
             with torch.no_grad():
                 # batch size = 1                
-                all_obj = torch.sigmoid(conf_pred[0, :, 0])           # 0 is because that these is only 1 batch.
+                all_class = torch.softmax(conf_pred[0, :, :], dim=1)[:, 1]           # background index=0.
                 all_bbox = torch.clamp((self.decode_boxes(txtytwth_pred) / self.scale_torch)[0], 0., 1.)
                 # separate box pred and class conf
-                all_obj = all_obj.to('cpu').numpy()
+                all_class = all_class.to('cpu').numpy()
                 all_bbox = all_bbox.to('cpu').numpy()
 
-                bboxes, scores = self.postprocess(all_bbox, all_obj)
+                bboxes, scores = self.postprocess(all_bbox, all_class)
 
                 return bboxes, scores
 
         else:
             # compute loss
-            conf_loss, txtytwth_loss, total_loss = tools.loss(pred_obj=conf_pred, pred_txtytwth=txtytwth_pred, label=target)
+            conf_loss, txtytwth_loss, total_loss = tools.loss(pred_conf=conf_pred, pred_txtytwth=txtytwth_pred, label=target)
 
             return conf_loss, txtytwth_loss, total_loss

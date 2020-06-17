@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from utils import Conv2d, SPP
+from utils import Conv2d, SPP, RFBblock
 from backbone import *
 import numpy as np
 import tools
@@ -26,27 +26,25 @@ class MiniYOLAF(nn.Module):
         self.backbone = darknet_light(pretrained=trainable, hr=hr)
 
         # s = 32
-        self.conv_set_3 = Conv2d(1024, 256, 1, leakyReLU=True)
-        self.conv_1x1_3 = Conv2d(256, 128, 1, leakyReLU=True)
         self.pred_3 = nn.Sequential(
-            Conv2d(256, 512, 3, padding=1, leakyReLU=True),
-            nn.Conv2d(512, self.anchor_number*(1 + 4), 1)
-            )
-
-        # s = 16
-        self.conv_set_2 = Conv2d(384, 128, 1, leakyReLU=True)
-        self.conv_1x1_2 = Conv2d(128, 64, 1, leakyReLU=True)
-        self.pred_2 = nn.Sequential(
+            Conv2d(1024, 128, 1, leakyReLU=True),
             Conv2d(128, 256, 3, padding=1, leakyReLU=True),
-            nn.Conv2d(256, self.anchor_number*(1 + 4), 1)
-            )
+            nn.Conv2d(256, self.anchor_number*(2 + 4), 1)
+        )
+        # s = 16
+        self.pred_2 = nn.Sequential(
+            Conv2d(256, 128, 1, leakyReLU=True),
+            Conv2d(128, 128, 3, padding=1, leakyReLU=True),
+            nn.Conv2d(128, self.anchor_number*(2 + 4), 1)
+        )
 
         # s = 8
-        self.conv_set_1 = Conv2d(192, 64, 1, leakyReLU=True)
         self.pred_1 = nn.Sequential(
-            Conv2d(64, 128, 3, padding=1, leakyReLU=True),
-            nn.Conv2d(128, self.anchor_number*(1 + 4), 1)
-            )
+            Conv2d(128, 64, 1, leakyReLU=True),
+            #RFBblock(64),
+            Conv2d(64, 64, 3, padding=1, leakyReLU=True),
+            nn.Conv2d(64, self.anchor_number*(2 + 4), 1)
+        )
 
 
     def create_grid(self, input_size):
@@ -179,18 +177,6 @@ class MiniYOLAF(nn.Module):
         # backbone
         fmp_1, fmp_2, fmp_3 = self.backbone(x)
 
-        # detection head
-        # FPN neck
-        fmp_3 = self.conv_set_3(fmp_3)
-        fmp_3_up = F.interpolate(self.conv_1x1_3(fmp_3), scale_factor=2.0, mode='bilinear', align_corners=True)
-
-        fmp_2 = torch.cat([fmp_2, fmp_3_up], 1)
-        fmp_2 = self.conv_set_2(fmp_2)
-        fmp_2_up = F.interpolate(self.conv_1x1_2(fmp_2), scale_factor=2.0, mode='bilinear', align_corners=True)
-
-        fmp_1 = torch.cat([fmp_1, fmp_2_up], 1)
-        fmp_1 = self.conv_set_1(fmp_1)
-
         # head
         # s = 32
         pred_3 = self.pred_3(fmp_3)
@@ -213,9 +199,9 @@ class MiniYOLAF(nn.Module):
 
             # Divide prediction to obj_pred, xywh_pred and cls_pred   
             # [B, H*W*anchor_n, 1]
-            conf_pred = pred[:, :, :1 * self.anchor_number].contiguous().view(B_, H_*W_*self.anchor_number, 1)
+            conf_pred = pred[:, :, :self.anchor_number * 2].contiguous().view(B_, H_*W_*self.anchor_number, 2)
             # [B, H*W*anchor_n, 4]
-            txtytwth_pred = pred[:, :, 1 * self.anchor_number:].contiguous().view(B_, H_*W_*self.anchor_number, 4)
+            txtytwth_pred = pred[:, :, self.anchor_number * 2:].contiguous().view(B_, H_*W_*self.anchor_number, 4)
 
             total_conf_pred.append(conf_pred)
             total_txtytwth_pred.append(txtytwth_pred)
@@ -230,18 +216,18 @@ class MiniYOLAF(nn.Module):
             txtytwth_pred = txtytwth_pred.view(B, -1, self.anchor_number, 4)
             with torch.no_grad():
                 # batch size = 1                
-                all_obj = torch.sigmoid(conf_pred[0, :, 0])           # 0 is because that these is only 1 batch.
+                all_class = torch.softmax(conf_pred[0, :, :], dim=1)[:, 1]           # background index=0.
                 all_bbox = torch.clamp((self.decode_boxes(txtytwth_pred) / self.scale_torch)[0], 0., 1.)
                 # separate box pred and class conf
-                all_obj = all_obj.to('cpu').numpy()
+                all_class = all_class.to('cpu').numpy()
                 all_bbox = all_bbox.to('cpu').numpy()
 
-                bboxes, scores = self.postprocess(all_bbox, all_obj)
+                bboxes, scores = self.postprocess(all_bbox, all_class)
 
                 return bboxes, scores
 
         else:
             # compute loss
-            conf_loss, txtytwth_loss, total_loss = tools.loss(pred_obj=conf_pred, pred_txtytwth=txtytwth_pred, label=target)
+            conf_loss, txtytwth_loss, total_loss = tools.loss(pred_conf=conf_pred, pred_txtytwth=txtytwth_pred, label=target)
 
             return conf_loss, txtytwth_loss, total_loss
