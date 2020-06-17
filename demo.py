@@ -88,7 +88,7 @@ def detect(net, device, transform, mode='image', path_to_img=None, path_to_vid=N
             # map the boxes to origin image scale
             bbox_pred *= scale
 
-            class_color = (255, 0, 0)
+            class_color = (0, 0, 255)
             for i, box in enumerate(bbox_pred):
                 xmin, ymin, xmax, ymax = box
                 # print(xmin, ymin, xmax, ymax)
@@ -152,21 +152,14 @@ def run():
     # build model
     if args.version == 'TinyYOLAF':
         from models.TinyYOLAF import TinyYOLAF
-        anchor_size = tools.get_total_anchor_size(name=args.setup)
+        anchor_size = tools.get_total_anchor_size(name=args.setup, version=args.version)
 
         net = TinyYOLAF(device, input_size=input_size, trainable=False, anchor_size=anchor_size)
         print('Let us test TinyYOLAF......')
 
-    elif args.version == 'SlimYOLAF':
-        from models.SlimYOLAF import SlimYOLAF
-        anchor_size = tools.get_total_anchor_size(name=args.setup)
-
-        net = SlimYOLAF(device, input_size=input_size, trainable=False, anchor_size=anchor_size)
-        print('Let us test SlimYOLAF......')
-
     elif args.version == 'MiniYOLAF':
         from models.MiniYOLAF import MiniYOLAF
-        anchor_size = tools.get_total_anchor_size(name=args.setup)
+        anchor_size = tools.get_total_anchor_size(name=args.setup, version=args.version)
 
         net = MiniYOLAF(device, input_size=input_size, trainable=False, anchor_size=anchor_size)
         print('Let us test MiniYOLAF......')

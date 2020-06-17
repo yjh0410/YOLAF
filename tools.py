@@ -30,6 +30,7 @@ class BCE_focal_loss(nn.Module):
         self.gamma = gamma
         self.reduction = reduction
     def forward(self, inputs, targets):
+        inputs = torch.sigmoid(inputs)
         pos_id = (targets==1.0).float()
         neg_id = (1 - pos_id).float()
         pos_loss = -pos_id * (1.0-inputs)**self.gamma * torch.log(inputs + 1e-14)
@@ -214,27 +215,28 @@ def multi_gt_creator_ab(input_size, strides, label_lists=[], name='widerface', v
     return gt_tensor
 
 
-def loss(pred_obj, pred_txtytwth, label):
+def loss(pred_conf, pred_txtytwth, label):
     # create loss_f
-    conf_loss_function = nn.BCEWithLogitsLoss(reduction='none') # BCE_focal_loss(reduction='mean') 
+    conf_loss_function = nn.CrossEntropyLoss(reduction='none') # nn.BCEWithLogitsLoss(reduction='none') 
     txty_loss_function = nn.BCEWithLogitsLoss(reduction='none')
     twth_loss_function = nn.MSELoss(reduction='none')
 
-    pred_obj = pred_obj[:, :, 0]
+    pred_conf = pred_conf.permute(0, 2, 1)
     pred_txty = pred_txtytwth[:, :, :2]
     pred_twth = pred_txtytwth[:, :, 2:]
         
-    gt_obj = label[:, :, 0].float()
+    gt_cls = label[:, :, 0].long()
     gt_txtytwth = label[:, :, 1:-1].float()
     gt_box_scale_weight = label[:, :, -1]
+    gt_mask = (gt_box_scale_weight > 0.).float()
 
     # objectness loss
-    conf_loss = torch.mean(torch.sum(conf_loss_function(pred_obj, gt_obj), 1))
-    # conf_loss = conf_loss_function(pred_obj, gt_obj)
+    conf_loss = torch.mean(torch.sum(conf_loss_function(pred_conf, gt_cls), 1))
+    # conf_loss = conf_loss_function(pred_conf, gt_cls)
         
     # box loss
-    txty_loss = torch.mean(torch.sum(torch.sum(txty_loss_function(pred_txty, gt_txtytwth[:, :, :2]), 2) * gt_box_scale_weight * gt_obj, 1))
-    twth_loss = torch.mean(torch.sum(torch.sum(twth_loss_function(pred_twth, gt_txtytwth[:, :, 2:]), 2) * gt_box_scale_weight * gt_obj, 1))
+    txty_loss = torch.mean(torch.sum(torch.sum(txty_loss_function(pred_txty, gt_txtytwth[:, :, :2]), 2) * gt_box_scale_weight * gt_mask, 1))
+    twth_loss = torch.mean(torch.sum(torch.sum(twth_loss_function(pred_twth, gt_txtytwth[:, :, 2:]), 2) * gt_box_scale_weight * gt_mask, 1))
 
     txtytwth_loss = txty_loss + twth_loss
 

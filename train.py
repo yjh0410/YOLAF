@@ -23,6 +23,8 @@ def parse_args():
                         help='widerface dataset')
     parser.add_argument('-hr', '--high_resolution', action='store_true', default=False,
                         help='use high resolution to pretrain.')  
+    parser.add_argument('-ms', '--multi_scale', action='store_true', default=False,
+                        help='use multi-scale trick')                  
     parser.add_argument('--batch_size', default=32, type=int, 
                         help='Batch size for training')
     parser.add_argument('--lr', default=1e-3, type=float, 
@@ -84,8 +86,14 @@ def train():
         device = torch.device("cpu")
 
     # use multi-scale trick
-    input_size = cfg['min_dim']
-    dataset = WIDERFaceDetection(root=args.dataset_root, transform=SSDAugmentation(cfg['min_dim'], mean=(0.406, 0.456, 0.485), std=(0.225, 0.224, 0.229)))
+    if args.multi_scale:
+        print('use multi-scale trick.')
+        input_size = 640
+        dataset = WIDERFaceDetection(root=args.dataset_root, transform=SSDAugmentation(640, mean=(0.406, 0.456, 0.485), std=(0.225, 0.224, 0.229)))
+
+    else:
+        input_size = cfg['min_dim']
+        dataset = WIDERFaceDetection(root=args.dataset_root, transform=SSDAugmentation(cfg['min_dim'], mean=(0.406, 0.456, 0.485), std=(0.225, 0.224, 0.229)))
 
     # build model
     if args.version == 'TinyYOLAF':
@@ -219,6 +227,18 @@ def train():
 
                 t0 = time.time()
 
+            # multi-scale trick
+            if iter_i % 10 == 0 and iter_i > 0 and args.multi_scale:
+                if epoch >= max_epoch - 10:
+                    size = 416
+                else:
+                    size = random.randint(10, 20) * 32
+                input_size = size
+
+                # change input dim
+                # But this operation will report bugs when we use more workers in data loader, so I have to use 0 workers.
+                # I don't know how to make it suit more workers, and I'm trying to solve this question.
+                data_loader.dataset.reset_transform(SSDAugmentation(input_size, mean=(0.406, 0.456, 0.485), std=(0.225, 0.224, 0.229)))
 
         if (epoch + 1) % 10 == 0:
             print('Saving state, epoch:', epoch + 1)

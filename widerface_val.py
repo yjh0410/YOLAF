@@ -144,13 +144,6 @@ if __name__=="__main__":
         net = TinyYOLAF(device, input_size=input_size, trainable=False, anchor_size=anchor_size)
         print('Let us eval TinyYOLAF......')
 
-    elif args.version == 'SlimYOLAF':
-        from models.SlimYOLAF import SlimYOLAF
-        anchor_size = tools.get_total_anchor_size(name=args.dataset, version=args.version)
-
-        net = SlimYOLAF(device, input_size=input_size, trainable=False, anchor_size=anchor_size)
-        print('Let us test SlimYOLAF......')
-
     elif args.version == 'MiniYOLAF':
         from models.MiniYOLAF import MiniYOLAF
         anchor_size = tools.get_total_anchor_size(name=args.dataset, version=args.version)
