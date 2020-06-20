@@ -29,15 +29,18 @@ parser.add_argument('--trained_model', default='weights/widerface/',
                     type=str, help='Trained state_dict file path to open')
 parser.add_argument('--vis_thresh', default=0.2, type=float,
                     help='Final confidence args.vis_threshold')
+                    
 
 args = parser.parse_args()
 
 print("----------------------------------------Face Detection--------------------------------------------")
-def detect(net, device, transform, mode='image', path_to_img=None, path_to_vid=None, path_to_save=None, setup='VOC'):
+def detect(net, device, transform, mode='image', path_to_img=None, path_to_vid=None, path_to_save=None, setup='widerface'):
     # ------------------------- Camera ----------------------------
     # I'm not sure whether this 'camera' mode works ...
     if mode == 'camera':
-        cap = cv2.VideoCapture(0)
+        print('use camera !!!')
+        cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+
         while True:
             ret, frame = cap.read()
             cv2.imshow('current frame', frame)
@@ -52,8 +55,8 @@ def detect(net, device, transform, mode='image', path_to_img=None, path_to_vid=N
             bbox_pred, scores = dets
 
             # scale each detection back up to the image
-            scale = np.array([[img.shape[1], img.shape[0],
-                                img.shape[1], img.shape[0]]])
+            scale = np.array([[frame.shape[1], frame.shape[0],
+                                frame.shape[1], frame.shape[0]]])
             # map the boxes to origin image scale
             bbox_pred *= scale
 
@@ -62,9 +65,11 @@ def detect(net, device, transform, mode='image', path_to_img=None, path_to_vid=N
                 xmin, ymin, xmax, ymax = box
                 # print(xmin, ymin, xmax, ymax)
                 if scores[i] > args.vis_thresh:
-                    cv2.rectangle(img, (int(xmin), int(ymin)), (int(xmax), int(ymax)), class_color, 2)
-            cv2.imshow('face detection', img)
-            cv2.waitKey(0)
+                    cv2.rectangle(frame, (int(xmin), int(ymin)), (int(xmax), int(ymax)), class_color, 2)
+            if path_to_save is not None:
+                out.write(frame)
+            cv2.imshow('face detection', frame)
+            cv2.waitKey(1)
         cap.release()
         cv2.destroyAllWindows()
 
@@ -157,12 +162,11 @@ def run():
         net = TinyYOLAF(device, input_size=input_size, trainable=False, anchor_size=anchor_size)
         print('Let us test TinyYOLAF......')
 
-    elif args.version == 'MiniYOLAF':
-        from models.MiniYOLAF import MiniYOLAF
-        anchor_size = tools.get_total_anchor_size(name=args.setup, version=args.version)
+    elif args.version == 'CenterYOLAF':
+        from models.CenterYOLAF import CenterYOLAF
 
-        net = MiniYOLAF(device, input_size=input_size, trainable=False, anchor_size=anchor_size)
-        print('Let us test MiniYOLAF......')
+        net = CenterYOLAF(device, input_size=input_size, trainable=False, conf_thresh=0.3, topk=200)
+        print('Let us test CenterYOLAF......')
 
     else:
         print('Unknown version !!!')
@@ -176,7 +180,10 @@ def run():
     net = net.to(device)
 
     # run
-    if args.mode == 'image':
+    if args.mode == 'camera':
+        detect(net, device, BaseTransform(net.input_size, mean=(0.406, 0.456, 0.485), std=(0.225, 0.224, 0.229)), 
+                    mode=args.mode, setup=args.setup)
+    elif args.mode == 'image':
         detect(net, device, BaseTransform(net.input_size, mean=(0.406, 0.456, 0.485), std=(0.225, 0.224, 0.229)), 
                     mode=args.mode, path_to_img=args.path_to_img, setup=args.setup)
     elif args.mode == 'video':

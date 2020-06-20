@@ -14,17 +14,18 @@ import torch.utils.data as data
 import numpy as np
 import argparse
 
+import matplotlib.pyplot as plt
+
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Face Detection')
     parser.add_argument('-v', '--version', default='FDNet',
-                        help='TinyYOLAF, MiniYOLAF')
+                        help='TinyYOLAF, MiniYOLAF, CenterYOLAF')
     parser.add_argument('-d', '--dataset', default='widerface',
                         help='widerface dataset')
     parser.add_argument('-hr', '--high_resolution', action='store_true', default=False,
-                        help='use high resolution to pretrain.')  
-    parser.add_argument('-ms', '--multi_scale', action='store_true', default=False,
-                        help='use multi-scale trick')                  
+                        help='use high resolution to pretrain.') 
     parser.add_argument('--batch_size', default=32, type=int, 
                         help='Batch size for training')
     parser.add_argument('--lr', default=1e-3, type=float, 
@@ -33,7 +34,7 @@ def parse_args():
                         help='use cos lr')
     parser.add_argument('-no_wp', '--no_warm_up', action='store_true', default=False,
                         help='yes or no to choose using warmup strategy to train')
-    parser.add_argument('--wp_epoch', type=int, default=5,
+    parser.add_argument('--wp_epoch', type=int, default=2,
                         help='The upper bound of warm-up')
     parser.add_argument('--dataset_root', default=WIDERFace_ROOT, 
                         help='Location of VOC root directory')
@@ -86,14 +87,8 @@ def train():
         device = torch.device("cpu")
 
     # use multi-scale trick
-    if args.multi_scale:
-        print('use multi-scale trick.')
-        input_size = 640
-        dataset = WIDERFaceDetection(root=args.dataset_root, transform=SSDAugmentation(640, mean=(0.406, 0.456, 0.485), std=(0.225, 0.224, 0.229)))
-
-    else:
-        input_size = cfg['min_dim']
-        dataset = WIDERFaceDetection(root=args.dataset_root, transform=SSDAugmentation(cfg['min_dim'], mean=(0.406, 0.456, 0.485), std=(0.225, 0.224, 0.229)))
+    input_size = cfg['min_dim']
+    dataset = WIDERFaceDetection(root=args.dataset_root, transform=SSDAugmentation(cfg['min_dim'], mean=(0.406, 0.456, 0.485), std=(0.225, 0.224, 0.229)))
 
     # build model
     if args.version == 'TinyYOLAF':
@@ -103,19 +98,11 @@ def train():
         net = TinyYOLAF(device, input_size=input_size, trainable=True, anchor_size=anchor_size, hr=hr)
         print('Let us train TinyYOLAF......')
 
-    elif args.version == 'SlimYOLAF':
-        from models.SlimYOLAF import SlimYOLAF
-        anchor_size = tools.get_total_anchor_size(name=args.dataset, version=args.version)
+    elif args.version == 'CenterYOLAF':
+        from models.CenterYOLAF import CenterYOLAF
 
-        net = SlimYOLAF(device, input_size=input_size, trainable=True, anchor_size=anchor_size, hr=hr)
-        print('Let us train SlimYOLAF......')
-
-    elif args.version == 'MiniYOLAF':
-        from models.MiniYOLAF import MiniYOLAF
-        anchor_size = tools.get_total_anchor_size(name=args.dataset, version=args.version)
-
-        net = MiniYOLAF(device, input_size=input_size, trainable=True, anchor_size=anchor_size, hr=hr)
-        print('Let us train MiniYOLAF......')
+        net = CenterYOLAF(device, input_size=input_size, trainable=True, hr=hr)
+        print('Let us train CenterYOLAF......')
 
     else:
         print('Unknown version !!!')
@@ -198,7 +185,13 @@ def train():
             # vis_data(images, targets, input_size)
 
             # make train label
-            targets = tools.multi_gt_creator_ab(input_size, net.stride, label_lists=targets, name=args.dataset, version=args.version)
+            if args.version == 'TinyYOLAF':
+                targets = tools.multi_gt_creator_ab(input_size, net.stride, label_lists=targets, name=args.dataset, version=args.version)
+            elif args.version == 'CenterYOLAF':
+                targets = tools.gt_creator(input_size, net.stride, targets, name=args.dataset)
+                # vis heatmap
+                # vis_heatmap(targets)
+
 
             # to device
             images = images.to(device)
@@ -227,18 +220,6 @@ def train():
 
                 t0 = time.time()
 
-            # multi-scale trick
-            if iter_i % 10 == 0 and iter_i > 0 and args.multi_scale:
-                if epoch >= max_epoch - 10:
-                    size = 416
-                else:
-                    size = random.randint(10, 20) * 32
-                input_size = size
-
-                # change input dim
-                # But this operation will report bugs when we use more workers in data loader, so I have to use 0 workers.
-                # I don't know how to make it suit more workers, and I'm trying to solve this question.
-                data_loader.dataset.reset_transform(SSDAugmentation(input_size, mean=(0.406, 0.456, 0.485), std=(0.225, 0.224, 0.229)))
 
         if (epoch + 1) % 10 == 0:
             print('Saving state, epoch:', epoch + 1)
@@ -274,7 +255,13 @@ def vis_data(images, targets, input_size):
 
     cv2.imshow('img', img_)
     cv2.waitKey(0)
-    print(targets)
+
+def vis_heatmap(targets):
+    # vis heatmap
+    heatmap = targets[0, :, 0].reshape(160, 160)
+    heatmap = cv2.resize(heatmap, (640, 640))
+    cv2.imshow('ss',heatmap)
+    cv2.waitKey(0)
 
 
 if __name__ == '__main__':

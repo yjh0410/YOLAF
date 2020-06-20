@@ -196,12 +196,12 @@ class DarkNet_Tiny(nn.Module):
 
     def forward(self, x):
         x = self.conv_1(x)
-        x = self.conv_2(x)
-        C_3 = self.conv_3(x)
+        C_2 = self.conv_2(x)
+        C_3 = self.conv_3(C_2)
         C_4 = self.conv_4(C_3)
         C_5 = self.conv_5(C_4)
 
-        return C_3, C_4, C_5
+        return C_2, C_3, C_4, C_5
 
 class DarkNet_Light(nn.Module):
     def __init__(self, num_classes=1000):

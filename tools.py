@@ -42,6 +42,126 @@ class BCE_focal_loss(nn.Module):
             return pos_loss + neg_loss
   
 
+class HeatmapLoss(nn.Module):
+    def __init__(self,  weight=None, alpha=2, beta=4, reduction='mean'):
+        super(HeatmapLoss, self).__init__()
+        self.alpha = alpha
+        self.beta = beta
+    def forward(self, inputs, targets):
+        inputs = torch.sigmoid(inputs)
+        center_id = (targets == 1.0).float()
+        other_id = (targets != 1.0).float()
+        center_loss = -center_id * (1.0-inputs)**self.alpha * torch.log(inputs + 1e-14)
+        other_loss = -other_id * (1 - targets)**self.beta * (inputs)**self.alpha * torch.log(1.0 - inputs + 1e-14)
+
+        return center_loss + other_loss
+
+
+def gaussian_radius(det_size, min_overlap=0.7):
+    box_h, box_h  = det_size
+    a1 = 1
+    b1 = (box_h + box_h)
+    c1 = box_h * box_h * (1 - min_overlap) / (1 + min_overlap)
+    sq1 = np.sqrt(b1 ** 2 - 4 * a1 * c1)
+    r1 = (b1 + sq1) / (2*a1)
+
+    a2 = 4
+    b2 = 2 * (box_h + box_h)
+    c2 = (1 - min_overlap) * box_h * box_h
+    sq2 = np.sqrt(b2 ** 2 - 4 * a2 * c2)
+    r2 = (b2 + sq2) / (2*a2)
+
+    a3 = 4 * min_overlap
+    b3 = -2 * min_overlap * (box_h + box_h)
+    c3 = (min_overlap - 1) * box_h * box_h
+    sq3 = np.sqrt(b3 ** 2 - 4 * a3 * c3)
+    r3 = (b3 + sq3) / (2*a3)
+    
+    return min(r1, r2, r3)
+
+
+def generate_dxdywh(gt_label, w, h, s):
+    xmin, ymin, xmax, ymax = gt_label[:-1]
+    # compute the center, width and height
+    c_x = (xmax + xmin) / 2 * w
+    c_y = (ymax + ymin) / 2 * h
+    box_w = (xmax - xmin) * w
+    box_h = (ymax - ymin) * h
+
+    box_w_s = box_w / s
+    box_h_s = box_h / s
+
+    r = gaussian_radius([box_w_s, box_h_s])
+    sigma_w = sigma_h = r / 3
+    # # sigma = bow / 2 / 3
+    # sigma_w = (box_w_s / 2) / 3
+    # sigma_h = (box_h_s / 2) / 3
+
+
+    if box_w < 1e-28 or box_h < 1e-28:
+        # print('A dirty data !!!')
+        return False    
+
+    # map center point of box to the grid cell
+    c_x_s = c_x / s
+    c_y_s = c_y / s
+    grid_x = int(c_x_s)
+    grid_y = int(c_y_s)
+    # compute the (x, y, w, h) for the corresponding grid cell
+    tx = c_x_s - grid_x
+    ty = c_y_s - grid_y
+    tw = np.log(box_w_s)
+    th = np.log(box_h_s)
+    weight = 1.0 # 2.0 - (box_w / w) * (box_h / h)
+
+    return grid_x, grid_y, tx, ty, tw, th, weight, sigma_w, sigma_h
+
+
+def gt_creator(input_size, stride, label_lists=[], name='widerface'):
+    # prepare the all empty gt datas
+    batch_size = len(label_lists)
+    w = input_size
+    h = input_size
+    
+    # We  make gt labels by anchor-free method and anchor-based method.
+    ws = w // stride
+    hs = h // stride
+    s = stride
+    gt_tensor = np.zeros([batch_size, hs, ws, 1+4+1])
+
+    # generate gt whose style is yolo-v1
+    for batch_index in range(batch_size):
+        for gt_label in label_lists[batch_index]:
+            result = generate_dxdywh(gt_label, w, h, s)
+            if result:
+                grid_x, grid_y, tx, ty, tw, th, weight, sigma_w, sigma_h = result
+
+                gt_tensor[batch_index, grid_y, grid_x, 0] = 1.0
+                gt_tensor[batch_index, grid_y, grid_x, 1:5] = np.array([tx, ty, tw, th])
+                gt_tensor[batch_index, grid_y, grid_x, 5] = weight
+
+                # # create Gauss heatmap
+                # x = np.tile(np.arange(ws), reps=(hs, 1))
+                # y = np.tile(np.arange(hs), reps=(ws, 1)).transpose()
+                # grid_dist = (x - grid_x) ** 2 / (2*sigma_w**2) + (y - grid_y) ** 2 / (2*sigma_h**2)
+                # heatmap = np.exp(-grid_dist)
+                # old_heatmap = gt_tensor[batch_index, :, :, 0]
+                # post_heatmap = np.maximum(old_heatmap, heatmap)
+                # gt_tensor[batch_index, :, :, 0] = post_heatmap
+
+                # create Gauss heatmap
+                for i in range(grid_x - 3*int(sigma_w), grid_x + 3*int(sigma_w) + 1):
+                    for j in range(grid_y - 3*int(sigma_h), grid_y + 3*int(sigma_h) + 1):
+                        if i < ws and j < hs:
+                            v = np.exp(- (i - grid_x)**2 / (2*sigma_w**2) - (j - grid_y)**2 / (2*sigma_h**2))
+                            pre_v = gt_tensor[batch_index, j, i, 0]
+                            gt_tensor[batch_index, j, i, 0] = max(v, pre_v)
+
+    gt_tensor = gt_tensor.reshape(batch_size, -1, 1+4+1)
+
+    return gt_tensor
+
+
 def get_total_anchor_size(name='widerface', version=None):
     if name == 'widerface':
         if version == 'TinyYOLAF' or version == 'MiniYOLAF':
@@ -215,17 +335,29 @@ def multi_gt_creator_ab(input_size, strides, label_lists=[], name='widerface', v
     return gt_tensor
 
 
-def loss(pred_conf, pred_txtytwth, label):
+def loss(pred_conf, pred_txtytwth, label, version='TinyYOLAF'):
     # create loss_f
-    conf_loss_function = nn.CrossEntropyLoss(reduction='none') # nn.BCEWithLogitsLoss(reduction='none') 
-    txty_loss_function = nn.BCEWithLogitsLoss(reduction='none')
-    twth_loss_function = nn.MSELoss(reduction='none')
+    if version == 'TinyYOLAF':
+        conf_loss_function = nn.CrossEntropyLoss(reduction='none')
+        txty_loss_function = nn.BCEWithLogitsLoss(reduction='none')
+        twth_loss_function = nn.MSELoss(reduction='none')
+    elif version == 'CenterYOLAF':
+        conf_loss_function = HeatmapLoss()
+        txty_loss_function = nn.BCEWithLogitsLoss(reduction='none')
+        twth_loss_function = nn.SmoothL1Loss(reduction='none')
 
-    pred_conf = pred_conf.permute(0, 2, 1)
+
+    if version == 'TinyYOLAF':
+        gt_cls = label[:, :, 0].long()
+        pred_conf = pred_conf.permute(0, 2, 1)
+
+    elif version == 'CenterYOLAF':
+        gt_cls = label[:, :, 0].float()
+        pred_conf = pred_conf[:, :, 0]
+
     pred_txty = pred_txtytwth[:, :, :2]
     pred_twth = pred_txtytwth[:, :, 2:]
-        
-    gt_cls = label[:, :, 0].long()
+    
     gt_txtytwth = label[:, :, 1:-1].float()
     gt_box_scale_weight = label[:, :, -1]
     gt_mask = (gt_box_scale_weight > 0.).float()

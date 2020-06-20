@@ -144,12 +144,11 @@ if __name__=="__main__":
         net = TinyYOLAF(device, input_size=input_size, trainable=False, anchor_size=anchor_size)
         print('Let us eval TinyYOLAF......')
 
-    elif args.version == 'MiniYOLAF':
-        from models.MiniYOLAF import MiniYOLAF
-        anchor_size = tools.get_total_anchor_size(name=args.dataset, version=args.version)
+    elif args.version == 'CenterYOLAF':
+        from models.CenterYOLAF import CenterYOLAF
 
-        net = MiniYOLAF(device, input_size=input_size, trainable=False, anchor_size=anchor_size)
-        print('Let us eval MiniYOLAF......')
+        net = CenterYOLAF(device, input_size=input_size, trainable=False, conf_thresh=0.01, topk=1000)
+        print('Let us eval CenterYOLAF......')
 
     else:
         print('Unknown version !!!')
