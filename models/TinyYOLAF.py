@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from utils import Conv2d
+from utils import Conv2d, SPP
 from backbone import *
 import numpy as np
 import tools
@@ -27,24 +27,26 @@ class TinyYOLAF(nn.Module):
         
         # s = 32
         self.conv_set_3 = nn.Sequential(
-            Conv2d(512, 256, 1, leakyReLU=True),
-            Conv2d(256, 512, 3, padding=1, leakyReLU=True),
-        )
-        self.conv_1x1_3 = Conv2d(512, 256, 1, leakyReLU=True)
-        self.pred_3 = nn.Conv2d(512, self.anchor_number*(2 + 4), 1)
+            SPP(),
+            Conv2d(512*4, 256, 1, leakyReLU=True),
+            Conv2d(256, 512, 3, padding=1, leakyReLU=True)
 
+        )
+        self.conv_1x1_3 = Conv2d(512, 128, 1, leakyReLU=True)
+        self.pred_3 = nn.Conv2d(512, self.anchor_number*(2 + 4), 1)
+        
         # s = 16
         self.conv_set_2 = nn.Sequential(
-            Conv2d(512, 256, 1, leakyReLU=True),
-            Conv2d(256, 256, 3, padding=1, leakyReLU=True),
+            Conv2d(384, 128, 1, leakyReLU=True),
+            Conv2d(128, 256, 3, padding=1, leakyReLU=True)
         )
-        self.conv_1x1_2 = Conv2d(256, 128, 1, leakyReLU=True)
+        self.conv_1x1_2 = Conv2d(256, 64, 1, leakyReLU=True)
         self.pred_2 = nn.Conv2d(256, self.anchor_number*(2 + 4), 1)
 
         # s = 8
         self.conv_set_1 = nn.Sequential(
-            Conv2d(256, 128, 1, leakyReLU=True),
-            Conv2d(128, 128, 3, padding=1, leakyReLU=True),
+            Conv2d(192, 64, 1, leakyReLU=True),
+            Conv2d(64, 128, 3, padding=1, leakyReLU=True)
         )
         self.pred_1 = nn.Conv2d(128, self.anchor_number*(2 + 4), 1)
     
@@ -176,7 +178,7 @@ class TinyYOLAF(nn.Module):
 
     def forward(self, x, target=None):
         # backbone
-        fmp_1, fmp_2, fmp_3 = self.backbone(x)
+        _, fmp_1, fmp_2, fmp_3 = self.backbone(x)
 
         # detection head
         # FPN neck
