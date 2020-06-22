@@ -91,11 +91,11 @@ def generate_dxdywh(gt_label, w, h, s):
     box_w_s = box_w / s
     box_h_s = box_h / s
 
-    r = gaussian_radius([box_w_s, box_h_s])
-    sigma_w = sigma_h = r / 3
-    # # sigma = bow / 2 / 3
-    # sigma_w = (box_w_s / 2) / 3
-    # sigma_h = (box_h_s / 2) / 3
+    # r = gaussian_radius([box_w_s, box_h_s])
+    # sigma_w = sigma_h = r / 3
+    # sigma = bow / 2 / 3
+    sigma_w = (box_w_s / 2) / 3
+    sigma_h = (box_h_s / 2) / 3
 
 
     if box_w < 1e-28 or box_h < 1e-28:
