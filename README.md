@@ -62,4 +62,14 @@ python widerface_val.py -v CenterYOLAF --trained_model [path_to_model]
 python demo.py -v [select a model] --cuda --trained_model [path_to_model] --mode [camera/image/video]
 ```
 
-I will provide more real demo results...
+CenterYOLAF:
+
+![Image](https://github.com/yjh0410/YOLAF/blob/master/img_file/000001.jpg)
+![Image](https://github.com/yjh0410/YOLAF/blob/master/img_file/000004.jpg)
+![Image](https://github.com/yjh0410/YOLAF/blob/master/img_file/000006.jpg)
+![Image](https://github.com/yjh0410/YOLAF/blob/master/img_file/000010.jpg)
+![Image](https://github.com/yjh0410/YOLAF/blob/master/img_file/000014.jpg)
+![Image](https://github.com/yjh0410/YOLAF/blob/master/img_file/000043.jpg)
+![Image](https://github.com/yjh0410/YOLAF/blob/master/img_file/000057.jpg)
+
+
